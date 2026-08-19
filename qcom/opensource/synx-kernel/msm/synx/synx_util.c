@@ -1574,7 +1574,6 @@ int synx_util_save_data(void *fence, u32 flags,
 		break;
 	default:
 		dprintk(SYNX_ERR, "invalid hash table selection\n");
-		kfree(entry);
 		rc = -SYNX_INVALID;
 	}
 
