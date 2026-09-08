@@ -3368,6 +3368,58 @@ void oplus_ofp_wait_te_before_aod_on(struct dsi_panel *panel)
 	return;
 }
 
+/* The panel latches AOD brightness from the 0x51 write inside the LP1 sequence and
+ * ignores 0x51 sent afterwards, so the standalone AOD_LOW/HIGH_LIGHT_MODE cmd sets
+ * never reach it on a cmd mode panel. Patch LP1's payload instead, taking the bytes
+ * the panel already declares in those cmd sets. */
+static void oplus_ofp_cmd_mode_aod_brightness_change(struct dsi_panel *panel)
+{
+	struct oplus_ofp_params *p_oplus_ofp_params = oplus_ofp_get_params(oplus_ofp_display_id);
+	struct dsi_panel_cmd_set *lp1_set = NULL;
+	struct dsi_panel_cmd_set *src_set = NULL;
+	char *lp1_buf = NULL;
+	char *src_buf = NULL;
+	u32 lp1_len = 0;
+	u32 src_len = 0;
+	u32 i = 0;
+
+	if (!panel || !panel->cur_mode || !panel->cur_mode->priv_info || !p_oplus_ofp_params) {
+		return;
+	}
+
+	lp1_set = &panel->cur_mode->priv_info->cmd_sets[DSI_CMD_SET_LP1];
+	src_set = &panel->cur_mode->priv_info->cmd_sets[p_oplus_ofp_params->aod_light_mode ?
+			DSI_CMD_AOD_LOW_LIGHT_MODE : DSI_CMD_AOD_HIGH_LIGHT_MODE];
+
+	for (i = 0; i < lp1_set->count; i++) {
+		char *buf = (char *)lp1_set->cmds[i].msg.tx_buf;
+
+		if (buf && (lp1_set->cmds[i].msg.tx_len > 1) && (buf[0] == 0x51)) {
+			lp1_buf = buf;
+			lp1_len = lp1_set->cmds[i].msg.tx_len;
+			break;
+		}
+	}
+
+	for (i = 0; i < src_set->count; i++) {
+		char *buf = (char *)src_set->cmds[i].msg.tx_buf;
+
+		if (buf && (src_set->cmds[i].msg.tx_len > 1) && (buf[0] == 0x51)) {
+			src_buf = buf;
+			src_len = src_set->cmds[i].msg.tx_len;
+			break;
+		}
+	}
+
+	if (!lp1_buf || !src_buf || (lp1_len != src_len)) {
+		OFP_DEBUG("no matching 0x51 payload, leaving lp1 alone\n");
+		return;
+	}
+
+	memcpy(&lp1_buf[1], &src_buf[1], lp1_len - 1);
+	OFP_INFO("aod_light_mode:%u, patched lp1 brightness\n", p_oplus_ofp_params->aod_light_mode);
+}
+
 int oplus_ofp_power_mode_handle(void *dsi_display, int power_mode)
 {
 	int rc = 0;
@@ -3461,6 +3513,9 @@ int oplus_ofp_power_mode_handle(void *dsi_display, int power_mode)
 					oplus_ofp_aod_wait_handle(c_conn, 1);
 				}
 				oplus_ofp_set_aod_state(true);
+
+				/* select the AOD brightness before LP1 latches it */
+				oplus_ofp_cmd_mode_aod_brightness_change(display->panel);
 
 				rc = dsi_panel_set_lp1(display->panel);
 				if (rc) {
