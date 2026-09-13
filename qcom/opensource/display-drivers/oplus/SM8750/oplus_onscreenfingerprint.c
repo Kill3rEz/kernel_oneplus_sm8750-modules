@@ -3368,23 +3368,22 @@ void oplus_ofp_wait_te_before_aod_on(struct dsi_panel *panel)
 	return;
 }
 
-/* AA569 (and similar BOE A0019 panels) ignore 0x51 in idle. AOD brightness is
- * page 0x1E register 0x81 (PeakLumin dimming): 0x00 = off / high, 0x10 = on / low.
- * Those two values already exist in this panel's PWM sequences. LP1 always wrote
- * 0x81=0x00, so AOD was stuck at the high level. Patch it from aod_light_mode
- * before dsi_panel_set_lp1() latches idle. 0x51 is still copied in case a later
- * panel rev actually uses it. */
-static void oplus_ofp_patch_lp1_dcs(struct dsi_panel_cmd_set *lp1_set, u8 dcs,
+/* AA569 (BOE A0019) ignores DCS 0x51 once idle is latched. LP1 used to send
+ * 0x51 *after* 0x39 enter_idle, so aod_light_mode was a no-op. Move 0x51
+ * immediately before 0x39 so DBV latches into idle, and copy 0x81 (PeakLumin)
+ * plus the 0x51 payload from the AOD high/low cmd set. Idempotent: a second
+ * LP1 entry does nothing if 0x51 is already before 0x39. */
+static void oplus_ofp_patch_lp1_dcs(struct dsi_panel_cmd_set *set, u8 dcs,
 		const u8 *payload, u32 payload_len)
 {
 	u32 i;
 
-	if (!lp1_set || !payload || !payload_len)
+	if (!set || !payload || !payload_len)
 		return;
 
-	for (i = 0; i < lp1_set->count; i++) {
-		char *buf = (char *)lp1_set->cmds[i].msg.tx_buf;
-		u32 len = lp1_set->cmds[i].msg.tx_len;
+	for (i = 0; i < set->count; i++) {
+		char *buf = (char *)set->cmds[i].msg.tx_buf;
+		u32 len = set->cmds[i].msg.tx_len;
 
 		if (buf && (len == payload_len + 1) && ((u8)buf[0] == dcs)) {
 			memcpy(&buf[1], payload, payload_len);
@@ -3393,10 +3392,62 @@ static void oplus_ofp_patch_lp1_dcs(struct dsi_panel_cmd_set *lp1_set, u8 dcs,
 	}
 }
 
+static void oplus_ofp_lp1_brightness_before_idle(struct dsi_panel_cmd_set *set)
+{
+	u32 i, idx_39 = ~0U, idx_51 = ~0U;
+	struct dsi_cmd_desc cmd_51;
+
+	if (!set || !set->cmds || set->count < 2)
+		return;
+
+	for (i = 0; i < set->count; i++) {
+		char *buf = (char *)set->cmds[i].msg.tx_buf;
+
+		if (!buf || !set->cmds[i].msg.tx_len)
+			continue;
+		if (((u8)buf[0] == 0x39) && (idx_39 == ~0U))
+			idx_39 = i;
+		if (((u8)buf[0] == 0x51) && (idx_51 == ~0U))
+			idx_51 = i;
+	}
+
+	if (idx_39 == ~0U || idx_51 == ~0U || idx_51 < idx_39)
+		return;
+
+	cmd_51 = set->cmds[idx_51];
+	for (i = idx_51; i > idx_39; i--)
+		set->cmds[i] = set->cmds[i - 1];
+	set->cmds[idx_39] = cmd_51;
+}
+
+static void oplus_ofp_patch_aod_cmd_set(struct dsi_panel_cmd_set *set,
+		struct dsi_panel_cmd_set *src_set, u8 peaklumin)
+{
+	u32 i;
+
+	if (!set || !set->cmds)
+		return;
+
+	oplus_ofp_patch_lp1_dcs(set, 0x81, &peaklumin, 1);
+
+	if (src_set && src_set->cmds) {
+		for (i = 0; i < src_set->count; i++) {
+			char *buf = (char *)src_set->cmds[i].msg.tx_buf;
+			u32 len = src_set->cmds[i].msg.tx_len;
+
+			if (buf && (len > 1) && ((u8)buf[0] == 0x51)) {
+				oplus_ofp_patch_lp1_dcs(set, 0x51, (u8 *)&buf[1], len - 1);
+				break;
+			}
+		}
+	}
+
+	oplus_ofp_lp1_brightness_before_idle(set);
+}
+
 static void oplus_ofp_cmd_mode_aod_brightness_change(struct dsi_panel *panel)
 {
 	struct oplus_ofp_params *p_oplus_ofp_params = oplus_ofp_get_params(oplus_ofp_display_id);
-	struct dsi_panel_cmd_set *lp1_set = NULL;
 	struct dsi_panel_cmd_set *src_set = NULL;
 	u8 peaklumin;
 	u32 i = 0;
@@ -3405,32 +3456,28 @@ static void oplus_ofp_cmd_mode_aod_brightness_change(struct dsi_panel *panel)
 		return;
 	}
 
-	lp1_set = &panel->cur_mode->priv_info->cmd_sets[DSI_CMD_SET_LP1];
 	src_set = &panel->cur_mode->priv_info->cmd_sets[p_oplus_ofp_params->aod_light_mode ?
 			DSI_CMD_AOD_LOW_LIGHT_MODE : DSI_CMD_AOD_HIGH_LIGHT_MODE];
 
 	peaklumin = p_oplus_ofp_params->aod_light_mode ? 0x10 : 0x00;
-	for (i = 0; i < src_set->count; i++) {
-		char *buf = (char *)src_set->cmds[i].msg.tx_buf;
+	if (src_set && src_set->cmds) {
+		for (i = 0; i < src_set->count; i++) {
+			char *buf = (char *)src_set->cmds[i].msg.tx_buf;
 
-		if (buf && (src_set->cmds[i].msg.tx_len == 2) && ((u8)buf[0] == 0x81)) {
-			peaklumin = (u8)buf[1];
-			break;
-		}
-	}
-	oplus_ofp_patch_lp1_dcs(lp1_set, 0x81, &peaklumin, 1);
-
-	for (i = 0; i < src_set->count; i++) {
-		char *buf = (char *)src_set->cmds[i].msg.tx_buf;
-		u32 len = src_set->cmds[i].msg.tx_len;
-
-		if (buf && (len > 1) && ((u8)buf[0] == 0x51)) {
-			oplus_ofp_patch_lp1_dcs(lp1_set, 0x51, (u8 *)&buf[1], len - 1);
-			break;
+			if (buf && (src_set->cmds[i].msg.tx_len == 2) && ((u8)buf[0] == 0x81)) {
+				peaklumin = (u8)buf[1];
+				break;
+			}
 		}
 	}
 
-	OFP_INFO("aod_light_mode:%u, patched lp1 0x81=0x%02x\n",
+	oplus_ofp_patch_aod_cmd_set(&panel->cur_mode->priv_info->cmd_sets[DSI_CMD_SET_LP1],
+			src_set, peaklumin);
+	oplus_ofp_patch_aod_cmd_set(
+			&panel->cur_mode->priv_info->cmd_sets[DSI_CMD_AOD_ON_PWM_MODE2],
+			src_set, peaklumin);
+
+	OFP_INFO("aod_light_mode:%u, patched lp1 0x81=0x%02x (0x51 before idle)\n",
 			p_oplus_ofp_params->aod_light_mode, peaklumin);
 }
 
@@ -4906,11 +4953,29 @@ ssize_t oplus_ofp_set_aod_light_mode_attr(struct kobject *obj,
 		return count;
 	}
 
-	sscanf(buf, "%u", &aod_light_mode);
+	{
+		char tag[8] = {0};
+
+		if (sscanf(buf, "%u %7s", &aod_light_mode, tag) < 1)
+			return count;
+
+		/* DeviceSettings writes "0 force" / "1 force". The sensors HAL
+		 * lux_aod path writes a bare 0/1 and would otherwise stomp the
+		 * user toggle every time AOD starts (dark room -> mode 1). */
+		if (p_oplus_ofp_params->aod_light_mode_locked &&
+				strncmp(tag, "force", 5)) {
+			OFP_DEBUG("ignore aod_light_mode:%u (locked %u)\n",
+					aod_light_mode, p_oplus_ofp_params->aod_light_mode);
+			return count;
+		}
+		if (!strncmp(tag, "force", 5))
+			p_oplus_ofp_params->aod_light_mode_locked = true;
+	}
 
 	last_aod_light_mode = p_oplus_ofp_params->aod_light_mode;
 	p_oplus_ofp_params->aod_light_mode = aod_light_mode;
-	OFP_INFO("aod_light_mode:%u\n", p_oplus_ofp_params->aod_light_mode);
+	OFP_INFO("aod_light_mode:%u locked:%d\n", p_oplus_ofp_params->aod_light_mode,
+			p_oplus_ofp_params->aod_light_mode_locked);
 	OPLUS_OFP_TRACE_INT("oplus_ofp_aod_light_mode", p_oplus_ofp_params->aod_light_mode);
 
 	if (!oplus_ofp_is_supported()) {
