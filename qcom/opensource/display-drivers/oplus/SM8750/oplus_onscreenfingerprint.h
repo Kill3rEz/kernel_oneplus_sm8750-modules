@@ -176,7 +176,7 @@ struct oplus_ofp_params {
 	ktime_t aod_off_cmd_timestamp;					/* record aod off cmds timestamp for aod off hbm on delay judgment */
 	ktime_t aod_on_cmd_timestamp;					/* record aod on cmds timestamp for aod off delay judgment */
 	unsigned int aod_light_mode;					/* aod brightness setting, 0:50nit, 1:10nit */
-	bool aod_light_mode_locked;					/* userspace "force" write; ignore lux_aod */
+	bool aod_light_mode_locked;					/* set by "force", cleared by "auto"; ignore lux_aod */
 	bool ultra_low_power_aod_state;					/* indicates whether panel is ultra low power aod state or not */
 	unsigned int ultra_low_power_aod_mode;			/* indicates whether ultra low power aod mode needs to be entered or not */
 	unsigned int longrui_aod_config;				/*

@@ -4959,9 +4959,18 @@ ssize_t oplus_ofp_set_aod_light_mode_attr(struct kobject *obj,
 		if (sscanf(buf, "%u %7s", &aod_light_mode, tag) < 1)
 			return count;
 
-		/* DeviceSettings writes "0 force" / "1 force". The sensors HAL
-		 * lux_aod path writes a bare 0/1 and would otherwise stomp the
-		 * user toggle every time AOD starts (dark room -> mode 1). */
+		/* Accepted forms:
+		 *   "<N>"       - bare write from the sensors HAL lux_aod path;
+		 *                 ignored while locked, applied otherwise.
+		 *   "<N> force" - DeviceSettings manual mode; applies N and locks
+		 *                 out bare writes, which would otherwise stomp the
+		 *                 user toggle every time AOD starts (dark room ->
+		 *                 mode 1).
+		 *   "<N> auto"  - DeviceSettings back to automatic; drops the lock
+		 *                 and applies N like a bare write, so lux_aod
+		 *                 drives the mode again without a reboot. */
+		if (!strncmp(tag, "auto", 4))
+			p_oplus_ofp_params->aod_light_mode_locked = false;
 		if (p_oplus_ofp_params->aod_light_mode_locked &&
 				strncmp(tag, "force", 5)) {
 			OFP_DEBUG("ignore aod_light_mode:%u (locked %u)\n",
