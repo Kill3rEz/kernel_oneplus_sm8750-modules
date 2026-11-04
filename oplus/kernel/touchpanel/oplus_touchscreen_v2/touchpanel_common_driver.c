@@ -5170,7 +5170,7 @@ static void ts_panel_notifier_callback(enum panel_event_notifier_tag tag,
 		return;
 	}
 	if (notification->notif_type <= DRM_PANEL_EVENT_FOR_TOUCH) {
-		TP_INFO(ts->tp_index, "Notification type:%d, early_trigger:%d",
+		TP_DEBUG(ts->tp_index, "Notification type:%d, early_trigger:%d",
 			notification->notif_type,
 			notification->notif_data.early_trigger);
 	}
@@ -5219,7 +5219,7 @@ static void ts_panel_notifier_callback(enum panel_event_notifier_tag tag,
 		}
 		break;
 	case DRM_PANEL_EVENT_FPS_CHANGE:
-		TP_INFO(ts->tp_index, "shashank:Received fps change old fps:%d new fps:%d\n",
+		TP_DEBUG(ts->tp_index, "shashank:Received fps change old fps:%d new fps:%d\n",
 				notification->notif_data.old_fps,
 				notification->notif_data.new_fps);
 		break;

@@ -2553,7 +2553,7 @@ static void ts_panel_notifier_callback(enum panel_event_notifier_tag tag,
 	syna_dev_update_lpwg_status(tcm);
 
 	if (notification->notif_type <= DRM_PANEL_EVENT_FOR_TOUCH) {
-		LOGI("Notification type:%d, early_trigger:%d",
+		LOGD("Notification type:%d, early_trigger:%d",
 				notification->notif_type,
 				notification->notif_data.early_trigger);
 	}
@@ -2613,7 +2613,7 @@ static void ts_panel_notifier_callback(enum panel_event_notifier_tag tag,
 		}
 		break;
 	case DRM_PANEL_EVENT_FPS_CHANGE:
-		LOGI("shashank:Received fps change old fps:%d new fps:%d\n",
+		LOGD("shashank:Received fps change old fps:%d new fps:%d\n",
 				notification->notif_data.old_fps,
 				notification->notif_data.new_fps);
 		break;
