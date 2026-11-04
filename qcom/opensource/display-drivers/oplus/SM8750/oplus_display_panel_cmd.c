@@ -721,14 +721,14 @@ int oplus_panel_cmd_print(struct dsi_panel *panel, enum dsi_cmd_set_type type)
 					cmd_set_prop_map[type], count);
 			panel->cur_mode->priv_info->oplus_adfr_idle_min_fps_log = false;
 		} else {
-			ADFR_INFO("[%s] dsi_cmd: %s, count=%d\n", panel->oplus_panel.vendor_name,
+			ADFR_DEBUG("[%s] dsi_cmd: %s, count=%d\n", panel->oplus_panel.vendor_name,
 					cmd_set_prop_map[type], count);
 		}
 		break;
 #endif /* OPLUS_FEATURE_DISPLAY_ADFR */
 
 	default:
-		OPLUS_DSI_INFO("[%s] dsi_cmd: %s\n", panel->oplus_panel.vendor_name,
+		OPLUS_DSI_DEBUG("[%s] dsi_cmd: %s\n", panel->oplus_panel.vendor_name,
 				cmd_set_prop_map[type]);
 		break;
 	}

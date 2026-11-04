@@ -8620,14 +8620,14 @@ int dsi_display_set_mode(struct dsi_display *display,
 	}
 
 #ifdef OPLUS_FEATURE_DISPLAY_ADFR
-	DSI_INFO("mdp_transfer_time=%d, hactive=%d, vactive=%d, fps=%d, h_skew=%d, clk_rate=%llu, h_sync_width=%d,\
+	DSI_DEBUG("mdp_transfer_time=%d, hactive=%d, vactive=%d, fps=%d, h_skew=%d, clk_rate=%llu, h_sync_width=%d,\
 				h_front_porch=%d, h_back_porch=%d, v_back_porch=%d, v_sync_width=%d, v_front_porch=%d\n",
 			adj_mode.priv_info->mdp_transfer_time_us,
 			timing.h_active, timing.v_active, timing.refresh_rate, timing.h_skew,
 			adj_mode.priv_info->clk_rate_hz, timing.h_sync_width, timing.h_front_porch,
 			timing.h_back_porch, timing.v_back_porch, timing.v_sync_width, timing.v_front_porch);
 #else
-	DSI_INFO("mdp_transfer_time=%d, hactive=%d, vactive=%d, fps=%d, clk_rate=%llu\n",
+	DSI_DEBUG("mdp_transfer_time=%d, hactive=%d, vactive=%d, fps=%d, clk_rate=%llu\n",
 			adj_mode.priv_info->mdp_transfer_time_us,
 			timing.h_active, timing.v_active, timing.refresh_rate,
 			adj_mode.priv_info->clk_rate_hz);

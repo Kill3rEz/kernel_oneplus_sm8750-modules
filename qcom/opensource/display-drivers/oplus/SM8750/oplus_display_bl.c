@@ -1146,7 +1146,7 @@ void oplus_panel_update_backlight(struct dsi_panel *panel,
 				&& !panel->oplus_panel.is_switching) {
 			oplus_apollo_async_bl_delay(panel);
 		} else {
-			DSI_INFO("invalid disable_delay_bl_count\n");
+			DSI_DEBUG("invalid disable_delay_bl_count\n");
 			panel->oplus_panel.disable_delay_bl_count = 0;
 		}
 	}
